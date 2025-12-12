@@ -1,0 +1,458 @@
+-- Roblox Forge/Crafting System
+-- Place this in StarterPlayer > StarterPlayerScripts as a LocalScript
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- Inventory System (simplified)
+local inventory = {
+    Iron = 10,
+    Wood = 15,
+    Steel = 5,
+    Gold = 3,
+    Diamond = 1
+}
+
+-- Cheat Settings
+local cheatsEnabled = false
+local infiniteMaterials = false
+
+-- Recipe Database
+local recipes = {
+    {
+        name = "Iron Sword",
+        materials = {Iron = 5, Wood = 2},
+        result = "Iron Sword",
+        icon = "🗡️"
+    },
+    {
+        name = "Steel Armor",
+        materials = {Steel = 8, Iron = 3},
+        result = "Steel Armor",
+        icon = "🛡️"
+    },
+    {
+        name = "Golden Axe",
+        materials = {Gold = 4, Wood = 3},
+        result = "Golden Axe",
+        icon = "🪓"
+    },
+    {
+        name = "Diamond Pickaxe",
+        materials = {Diamond = 3, Wood = 2},
+        result = "Diamond Pickaxe",
+        icon = "⛏️"
+    },
+    {
+        name = "Wooden Shield",
+        materials = {Wood = 10},
+        result = "Wooden Shield",
+        icon = "🛡️"
+    }
+}
+
+-- Create GUI
+local function createForgeGUI()
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "ForgeGUI"
+    screenGui.ResetOnSpawn = false
+    screenGui.Parent = playerGui
+    
+    -- Main Frame
+    local mainFrame = Instance.new("Frame")
+    mainFrame.Name = "MainFrame"
+    mainFrame.Size = UDim2.new(0, 600, 0, 450)
+    mainFrame.Position = UDim2.new(0.5, -300, 0.5, -225)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    mainFrame.BorderSizePixel = 0
+    mainFrame.Visible = false
+    mainFrame.Parent = screenGui
+    
+    -- Corner
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 10)
+    corner.Parent = mainFrame
+    
+    -- Title
+    local title = Instance.new("TextLabel")
+    title.Name = "Title"
+    title.Size = UDim2.new(1, 0, 0, 50)
+    title.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    title.Text = "⚒️ FORGE"
+    title.TextColor3 = Color3.fromRGB(255, 200, 0)
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 24
+    title.Parent = mainFrame
+    
+    local titleCorner = Instance.new("UICorner")
+    titleCorner.CornerRadius = UDim.new(0, 10)
+    titleCorner.Parent = title
+    
+    -- Close Button
+    local closeBtn = Instance.new("TextButton")
+    closeBtn.Name = "CloseButton"
+    closeBtn.Size = UDim2.new(0, 40, 0, 40)
+    closeBtn.Position = UDim2.new(1, -45, 0, 5)
+    closeBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+    closeBtn.Text = "✕"
+    closeBtn.TextColor3 = Color3.white
+    closeBtn.Font = Enum.Font.GothamBold
+    closeBtn.TextSize = 20
+    closeBtn.Parent = mainFrame
+    
+    local closeBtnCorner = Instance.new("UICorner")
+    closeBtnCorner.CornerRadius = UDim.new(0, 8)
+    closeBtnCorner.Parent = closeBtn
+    
+    -- Inventory Display
+    local inventoryFrame = Instance.new("Frame")
+    inventoryFrame.Name = "InventoryFrame"
+    inventoryFrame.Size = UDim2.new(0.95, 0, 0, 80)
+    inventoryFrame.Position = UDim2.new(0.025, 0, 0, 60)
+    inventoryFrame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    inventoryFrame.Parent = mainFrame
+    
+    local invCorner = Instance.new("UICorner")
+    invCorner.CornerRadius = UDim.new(0, 8)
+    invCorner.Parent = inventoryFrame
+    
+    local invTitle = Instance.new("TextLabel")
+    invTitle.Size = UDim2.new(1, 0, 0, 25)
+    invTitle.BackgroundTransparency = 1
+    invTitle.Text = "Your Materials:"
+    invTitle.TextColor3 = Color3.white
+    invTitle.Font = Enum.Font.Gotham
+    invTitle.TextSize = 14
+    invTitle.TextXAlignment = Enum.TextXAlignment.Left
+    invTitle.Position = UDim2.new(0, 10, 0, 5)
+    invTitle.Parent = inventoryFrame
+    
+    local invText = Instance.new("TextLabel")
+    invText.Name = "InventoryText"
+    invText.Size = UDim2.new(1, -20, 1, -30)
+    invText.Position = UDim2.new(0, 10, 0, 30)
+    invText.BackgroundTransparency = 1
+    invText.TextColor3 = Color3.fromRGB(150, 255, 150)
+    invText.Font = Enum.Font.GothamMedium
+    invText.TextSize = 16
+    invText.TextXAlignment = Enum.TextXAlignment.Left
+    invText.TextYAlignment = Enum.TextYAlignment.Top
+    invText.Parent = inventoryFrame
+    
+    -- Recipes Scroll Frame
+    local scrollFrame = Instance.new("ScrollingFrame")
+    scrollFrame.Name = "RecipesScroll"
+    scrollFrame.Size = UDim2.new(0.95, 0, 0, 260)
+    scrollFrame.Position = UDim2.new(0.025, 0, 0, 150)
+    scrollFrame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    scrollFrame.BorderSizePixel = 0
+    scrollFrame.ScrollBarThickness = 6
+    scrollFrame.Parent = mainFrame
+    
+    local scrollCorner = Instance.new("UICorner")
+    scrollCorner.CornerRadius = UDim.new(0, 8)
+    scrollCorner.Parent = scrollFrame
+    
+    local listLayout = Instance.new("UIListLayout")
+    listLayout.Padding = UDim.new(0, 8)
+    listLayout.Parent = scrollFrame
+    
+    -- Cheat Menu Button
+    local cheatBtn = Instance.new("TextButton")
+    cheatBtn.Name = "CheatButton"
+    cheatBtn.Size = UDim2.new(0, 120, 0, 30)
+    cheatBtn.Position = UDim2.new(0.025, 0, 1, -35)
+    cheatBtn.BackgroundColor3 = Color3.fromRGB(150, 50, 150)
+    cheatBtn.Text = "🔓 Cheats"
+    cheatBtn.TextColor3 = Color3.white
+    cheatBtn.Font = Enum.Font.GothamBold
+    cheatBtn.TextSize = 14
+    cheatBtn.Parent = mainFrame
+    
+    local cheatBtnCorner = Instance.new("UICorner")
+    cheatBtnCorner.CornerRadius = UDim.new(0, 6)
+    cheatBtnCorner.Parent = cheatBtn
+    
+    -- Cheat Menu Frame
+    local cheatFrame = Instance.new("Frame")
+    cheatFrame.Name = "CheatFrame"
+    cheatFrame.Size = UDim2.new(0, 250, 0, 150)
+    cheatFrame.Position = UDim2.new(0, -260, 1, -185)
+    cheatFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    cheatFrame.BorderSizePixel = 0
+    cheatFrame.Visible = false
+    cheatFrame.Parent = mainFrame
+    
+    local cheatFrameCorner = Instance.new("UICorner")
+    cheatFrameCorner.CornerRadius = UDim.new(0, 8)
+    cheatFrameCorner.Parent = cheatFrame
+    
+    local cheatTitle = Instance.new("TextLabel")
+    cheatTitle.Size = UDim2.new(1, 0, 0, 35)
+    cheatTitle.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    cheatTitle.Text = "🔓 CHEATS"
+    cheatTitle.TextColor3 = Color3.fromRGB(200, 100, 255)
+    cheatTitle.Font = Enum.Font.GothamBold
+    cheatTitle.TextSize = 16
+    cheatTitle.Parent = cheatFrame
+    
+    local cheatTitleCorner = Instance.new("UICorner")
+    cheatTitleCorner.CornerRadius = UDim.new(0, 8)
+    cheatTitleCorner.Parent = cheatTitle
+    
+    -- Infinite Materials Toggle
+    local infMatBtn = Instance.new("TextButton")
+    infMatBtn.Name = "InfMaterialsBtn"
+    infMatBtn.Size = UDim2.new(0.9, 0, 0, 40)
+    infMatBtn.Position = UDim2.new(0.05, 0, 0, 45)
+    infMatBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+    infMatBtn.Text = "Infinite Materials: OFF"
+    infMatBtn.TextColor3 = Color3.white
+    infMatBtn.Font = Enum.Font.Gotham
+    infMatBtn.TextSize = 14
+    infMatBtn.Parent = cheatFrame
+    
+    local infMatBtnCorner = Instance.new("UICorner")
+    infMatBtnCorner.CornerRadius = UDim.new(0, 6)
+    infMatBtnCorner.Parent = infMatBtn
+    
+    -- Max All Materials Button
+    local maxMatBtn = Instance.new("TextButton")
+    maxMatBtn.Name = "MaxMaterialsBtn"
+    maxMatBtn.Size = UDim2.new(0.9, 0, 0, 40)
+    maxMatBtn.Position = UDim2.new(0.05, 0, 0, 95)
+    maxMatBtn.BackgroundColor3 = Color3.fromRGB(80, 150, 255)
+    maxMatBtn.Text = "Max All Materials (999)"
+    maxMatBtn.TextColor3 = Color3.white
+    maxMatBtn.Font = Enum.Font.Gotham
+    maxMatBtn.TextSize = 14
+    maxMatBtn.Parent = cheatFrame
+    
+    local maxMatBtnCorner = Instance.new("UICorner")
+    maxMatBtnCorner.CornerRadius = UDim.new(0, 6)
+    maxMatBtnCorner.Parent = maxMatBtn
+    
+    return screenGui, mainFrame, invText, scrollFrame, cheatBtn, cheatFrame, infMatBtn, maxMatBtn
+end
+
+-- Update inventory display
+local function updateInventoryDisplay(invText)
+    local text = ""
+    for material, amount in pairs(inventory) do
+        text = text .. material .. ": " .. amount .. "  "
+    end
+    invText.Text = text
+end
+
+-- Check if player can craft
+local function canCraft(recipe)
+    for material, amount in pairs(recipe.materials) do
+        if not inventory[material] or inventory[material] < amount then
+            return false
+        end
+    end
+    return true
+end
+
+-- Craft item
+local function craftItem(recipe, invText)
+    if canCraft(recipe) or infiniteMaterials then
+        -- Deduct materials (unless infinite materials cheat is on)
+        if not infiniteMaterials then
+            for material, amount in pairs(recipe.materials) do
+                inventory[material] = inventory[material] - amount
+            end
+        end
+        
+        -- Add crafted item (in this example, just show message)
+        updateInventoryDisplay(invText)
+        
+        -- Create notification
+        local notification = Instance.new("TextLabel")
+        notification.Size = UDim2.new(0, 300, 0, 50)
+        notification.Position = UDim2.new(0.5, -150, 0, 100)
+        notification.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
+        notification.Text = "✓ Crafted: " .. recipe.result
+        notification.TextColor3 = Color3.white
+        notification.Font = Enum.Font.GothamBold
+        notification.TextSize = 18
+        notification.Parent = playerGui:WaitForChild("ForgeGUI")
+        
+        local notifCorner = Instance.new("UICorner")
+        notifCorner.CornerRadius = UDim.new(0, 8)
+        notifCorner.Parent = notification
+        
+        wait(2)
+        notification:Destroy()
+        
+        return true
+    else
+        -- Show error
+        local errorNotif = Instance.new("TextLabel")
+        errorNotif.Size = UDim2.new(0, 300, 0, 50)
+        errorNotif.Position = UDim2.new(0.5, -150, 0, 100)
+        errorNotif.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+        errorNotif.Text = "✗ Not enough materials!"
+        errorNotif.TextColor3 = Color3.white
+        errorNotif.Font = Enum.Font.GothamBold
+        errorNotif.TextSize = 18
+        errorNotif.Parent = playerGui:WaitForChild("ForgeGUI")
+        
+        local errCorner = Instance.new("UICorner")
+        errCorner.CornerRadius = UDim.new(0, 8)
+        errCorner.Parent = errorNotif
+        
+        wait(2)
+        errorNotif:Destroy()
+        
+        return false
+    end
+end
+
+-- Create recipe buttons
+local function createRecipeButtons(scrollFrame, invText)
+    for _, recipe in ipairs(recipes) do
+        local recipeFrame = Instance.new("Frame")
+        recipeFrame.Size = UDim2.new(1, -12, 0, 70)
+        recipeFrame.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+        recipeFrame.Parent = scrollFrame
+        
+        local recipeCorner = Instance.new("UICorner")
+        recipeCorner.CornerRadius = UDim.new(0, 6)
+        recipeCorner.Parent = recipeFrame
+        
+        -- Recipe Name
+        local nameLabel = Instance.new("TextLabel")
+        nameLabel.Size = UDim2.new(0.6, 0, 0, 25)
+        nameLabel.Position = UDim2.new(0, 10, 0, 5)
+        nameLabel.BackgroundTransparency = 1
+        nameLabel.Text = recipe.icon .. " " .. recipe.name
+        nameLabel.TextColor3 = Color3.fromRGB(255, 200, 0)
+        nameLabel.Font = Enum.Font.GothamBold
+        nameLabel.TextSize = 16
+        nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+        nameLabel.Parent = recipeFrame
+        
+        -- Materials Required
+        local materialsText = ""
+        for material, amount in pairs(recipe.materials) do
+            materialsText = materialsText .. material .. " x" .. amount .. "  "
+        end
+        
+        local materialsLabel = Instance.new("TextLabel")
+        materialsLabel.Size = UDim2.new(0.6, 0, 0, 35)
+        materialsLabel.Position = UDim2.new(0, 10, 0, 30)
+        materialsLabel.BackgroundTransparency = 1
+        materialsLabel.Text = materialsText
+        materialsLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+        materialsLabel.Font = Enum.Font.Gotham
+        materialsLabel.TextSize = 14
+        materialsLabel.TextXAlignment = Enum.TextXAlignment.Left
+        materialsLabel.Parent = recipeFrame
+        
+        -- Craft Button
+        local craftBtn = Instance.new("TextButton")
+        craftBtn.Size = UDim2.new(0, 100, 0, 50)
+        craftBtn.Position = UDim2.new(1, -110, 0.5, -25)
+        craftBtn.BackgroundColor3 = Color3.fromRGB(80, 150, 255)
+        craftBtn.Text = "FORGE"
+        craftBtn.TextColor3 = Color3.white
+        craftBtn.Font = Enum.Font.GothamBold
+        craftBtn.TextSize = 16
+        craftBtn.Parent = recipeFrame
+        
+        local btnCorner = Instance.new("UICorner")
+        btnCorner.CornerRadius = UDim.new(0, 6)
+        btnCorner.Parent = craftBtn
+        
+        -- Update button color based on materials
+        local function updateButtonState()
+            if canCraft(recipe) or infiniteMaterials then
+                craftBtn.BackgroundColor3 = Color3.fromRGB(80, 200, 80)
+            else
+                craftBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+            end
+        end
+        
+        updateButtonState()
+        
+        craftBtn.MouseButton1Click:Connect(function()
+            if craftItem(recipe, invText) then
+                updateButtonState()
+            end
+        end)
+        
+        -- Update button states when cheats change
+        game:GetService("RunService").Heartbeat:Connect(function()
+            updateButtonState()
+        end)
+    end
+    
+    scrollFrame.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y)
+end
+
+-- Main Setup
+local screenGui, mainFrame, invText, scrollFrame, cheatBtn, cheatFrame, infMatBtn, maxMatBtn = createForgeGUI()
+updateInventoryDisplay(invText)
+createRecipeButtons(scrollFrame, invText)
+
+-- Cheat Menu Toggle
+cheatBtn.MouseButton1Click:Connect(function()
+    cheatFrame.Visible = not cheatFrame.Visible
+end)
+
+-- Infinite Materials Toggle
+infMatBtn.MouseButton1Click:Connect(function()
+    infiniteMaterials = not infiniteMaterials
+    if infiniteMaterials then
+        infMatBtn.BackgroundColor3 = Color3.fromRGB(80, 200, 80)
+        infMatBtn.Text = "Infinite Materials: ON"
+    else
+        infMatBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+        infMatBtn.Text = "Infinite Materials: OFF"
+    end
+end)
+
+-- Max All Materials Button
+maxMatBtn.MouseButton1Click:Connect(function()
+    for material, _ in pairs(inventory) do
+        inventory[material] = 999
+    end
+    updateInventoryDisplay(invText)
+    
+    -- Show notification
+    local notification = Instance.new("TextLabel")
+    notification.Size = UDim2.new(0, 300, 0, 50)
+    notification.Position = UDim2.new(0.5, -150, 0, 100)
+    notification.BackgroundColor3 = Color3.fromRGB(150, 50, 255)
+    notification.Text = "✓ All materials set to 999!"
+    notification.TextColor3 = Color3.white
+    notification.Font = Enum.Font.GothamBold
+    notification.TextSize = 18
+    notification.Parent = screenGui
+    
+    local notifCorner = Instance.new("UICorner")
+    notifCorner.CornerRadius = UDim.new(0, 8)
+    notifCorner.Parent = notification
+    
+    wait(2)
+    notification:Destroy()
+end)
+
+-- Toggle GUI with 'F' key
+local UserInputService = game:GetService("UserInputService")
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if not gameProcessed and input.KeyCode == Enum.KeyCode.F then
+        mainFrame.Visible = not mainFrame.Visible
+    end
+end)
+
+-- Close button functionality
+mainFrame:FindFirstChild("CloseButton").MouseButton1Click:Connect(function()
+    mainFrame.Visible = false
+end)
+
+print("Forge system loaded! Press 'F' to open the forge.")
